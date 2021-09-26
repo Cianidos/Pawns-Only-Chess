@@ -1,0 +1,10 @@
+/gradle/
+/build/
+/.idea/
+/.gradle/
+/Pawns-Only Chess/task/build/
+/Pawns-Only Chess/task/out/
+*.yaml
+/Pawns-Only Chess/Game loop/
+/gradlew
+/gradlew.bat
