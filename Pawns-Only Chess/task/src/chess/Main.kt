@@ -236,20 +236,20 @@ class GameBoard {
     fun checkEndOfGame(): Winning {
         rowBoard[0].forEach {
             if (it is CellT.Chess.Black)
-                return Winning.Win("White wins!")
+                return Winning.black
         }
         rowBoard[7].forEach {
             if (it is CellT.Chess.White)
-                return Winning.Win("White wins!")
+                return Winning.white
         }
         val (b, w) = countBlackAndWhite()
-        if (b == 0) return Winning.Win("White wins!")
-        if (w == 0) return Winning.Win("Black wins!")
+        if (b == 0) return Winning.white
+        if (w == 0) return Winning.black
 
         if (!haveCorrectTurns<CellT.Chess.White>())
-            return Winning.Win("Stalemate")
+            return Winning.stalemate
         if (!haveCorrectTurns<CellT.Chess.Black>())
-            return Winning.Win("Stalemate")
+            return Winning.stalemate
 
         return Winning.InProgress
     }
@@ -283,6 +283,12 @@ sealed class GameAction {
 }
 
 sealed class Winning {
+    companion object {
+        val white = Win("White wins!")
+        val black = Win("Black wins!")
+        val stalemate = Win("Stalemate!")
+    }
+
     data class Win(private val str: String) : Winning() {
         override fun toString() = str
     }
