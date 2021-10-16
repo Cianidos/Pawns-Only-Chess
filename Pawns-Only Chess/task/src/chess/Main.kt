@@ -315,41 +315,31 @@ class Game {
     }
 
     fun start() {
-        var stop = false
-        while (!stop) {
+        while (true) {
             val action = GameAction.parse(
                 gameInput("${currPlayerName}'s turn:")
             )
-            stop = when (action) {
+            when (action) {
                 GameAction.Error -> {
                     GameOutput("Invalid Input")
-                    false
                 }
                 GameAction.ExitAction -> {
                     GameOutput("Bye!")
-                    true
+                    break
                 }
                 is GameAction.TurnAction -> {
-                    processTurn(action.turn)
+                    when (val it = board.processTurn(action.turn, currPlayer)) {
+                        null -> Unit
+                        else -> {
+                            GameOutput(it); continue
+                        }
+                    }
+                    GameOutput(BoardString(board.rowBoard).toString())
+                    if (checkEndOfGame()) break
+                    currPlayer = !currPlayer
                 }
             }
         }
-    }
-
-    private fun processTurn(turn: Turn): Boolean {
-        board.processTurn(turn, currPlayer)?.let {
-            GameOutput(it)
-            return false
-        }
-        return eofProcessing()
-    }
-
-    private fun eofProcessing(): Boolean {
-        GameOutput(BoardString(board.rowBoard).toString())
-        if (checkEndOfGame())
-            return true
-        currPlayer = !currPlayer
-        return false
     }
 
     private fun checkEndOfGame(): Boolean {
