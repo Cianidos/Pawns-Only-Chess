@@ -1,12 +1,12 @@
 package chess
 
-import java.util.*
-import kotlin.math.*
+import kotlin.math.abs
 
 sealed class CellT {
     abstract val direction: Int
 
     sealed class Chess : CellT() {
+        // TODO: direction kludge refactor
         var walked: Int = 0
 
         class Black : Chess() {
@@ -26,27 +26,22 @@ sealed class CellT {
     }
 }
 
+
 class EvenLine {
-    override fun toString(): String {
-        return "  +---+---+---+---+---+---+---+---+"
-    }
+    override fun toString() = "  +---+---+---+---+---+---+---+---+"
 }
 
 class OddLine(
     private val rowNum: Int,
     private val row: Collection<CellT>
 ) {
-    override fun toString(): String {
-        return row.joinToString(" | ", "$rowNum | ", " |")
-    }
+    override fun toString() = row.joinToString(" | ", "$rowNum | ", " |")
 }
 
 class LettersLine {
-    override fun toString(): String {
-        return "abcdefgh"
-            .split("")
-            .joinToString("   ", " ", "  ")
-    }
+    override fun toString() = "abcdefgh"
+        .split("")
+        .joinToString("   ", " ", "  ")
 }
 
 class BoardString(
@@ -56,30 +51,23 @@ class BoardString(
         val evenLine = "\n" + EvenLine().toString() + "\n"
     }
 
-    override fun toString(): String {
-        return board.reversed()
-            .mapIndexed { idx, row ->
-                OddLine(board.size - idx, row).toString()
-            }.joinToString(
-                evenLine, evenLine,
-                evenLine + LettersLine().toString() + "\n"
-            )
-    }
+    override fun toString() = board.reversed()
+        .mapIndexed { idx, row ->
+            OddLine(board.size - idx, row).toString()
+        }.joinToString(
+            evenLine, evenLine,
+            evenLine + LettersLine().toString() + "\n"
+        )
 }
 
-class GameInput(question: String? = null) {
-    var answer: String
-
-    init {
-        if (question != null)
-            println(question)
-        answer = (readLine()!!).trim()
-    }
+fun gameInput(question: String? = null): String {
+    question?.let { println(it) }
+    return (readLine()!!).trim()
 }
 
 class PlayersNames {
-    val playerOne: String = GameInput("First Player's name:").answer
-    val playerTwo: String = GameInput("Second Player's name:").answer
+    val playerOne: String = gameInput("First Player's name:")
+    val playerTwo: String = gameInput("Second Player's name:")
 }
 
 class GameOutput(message: String) {
@@ -112,22 +100,30 @@ data class Turn(val from: Position, val to: Position) {
             Position(str[2], str[3].digitToInt())
         )
     }
+
     constructor(other: Turn) : this(other.from, other.to)
     constructor(str: String) : this(parseTurn(str))
 
     val isBlack: Boolean = to.y < from.y
     val isWhite: Boolean = to.y > from.y
-    val isInBoard: Boolean = listOf(from.x, from.y, to.x, to.y).fold(true) {acc, i -> acc && i in 0..7 }
+    val isInBoard: Boolean = listOf(
+        from.x,
+        from.y,
+        to.x,
+        to.y
+    ).fold(true) { acc, i -> acc && i in 0..7 }
     val isOnlyForward: Boolean = from.x == to.x
     val isForward: Boolean = abs(from.y - to.y) == 1
     val isDouble: Boolean = abs(from.y - to.y) == 2
     val isToLeft: Boolean = (from.x - 1) == to.x
     val isToRight: Boolean = (from.x + 1) == to.x
-    val isEnPassant: Boolean = isBlack && !isOnlyForward && from.y == 3 && to.y == 2 ||
-            isWhite && !isOnlyForward && from.y == 4 && to.y == 5
-    val isInArea: Boolean = (isToLeft && isForward) xor (isToRight && isForward) xor (isOnlyForward && isForward) xor (isOnlyForward && isDouble)
-    val vertDirection = if(isWhite) 1 else -1
-    val horDirection = if(isOnlyForward) 0 else (if (isToLeft) -1 else 1)
+    val isEnPassant: Boolean =
+        isBlack && !isOnlyForward && from.y == 3 && to.y == 2 ||
+                isWhite && !isOnlyForward && from.y == 4 && to.y == 5
+    val isInArea: Boolean =
+        (isToLeft && isForward) xor (isToRight && isForward) xor (isOnlyForward && isForward) xor (isOnlyForward && isDouble)
+    val vertDirection = if (isWhite) 1 else -1
+    val horDirection = if (isOnlyForward) 0 else (if (isToLeft) -1 else 1)
 
     fun isCorrect(gameBoard: GameBoard): Boolean {
         when {
@@ -141,7 +137,10 @@ data class Turn(val from: Position, val to: Position) {
             fromC.direction != vertDirection -> false
             fromC.walked != 0 && isDouble -> false
             isOnlyForward && isForward && toC.direction != 0 -> false
-            isOnlyForward && isDouble && toC.direction != 0 && gameBoard[Position(from.letter, from.num + vertDirection)].direction != 0 -> false
+            isOnlyForward && isDouble && toC.direction != 0 && gameBoard[Position(
+                from.letter,
+                from.num + vertDirection
+            )].direction != 0 -> false
             isOnlyForward -> true
             (!isOnlyForward) && toC.direction == (-fromC.direction) -> true
             (!isOnlyForward) && gameBoard.lastTurn.isDouble && gameBoard.lastTurn.to.x == to.x && isEnPassant -> true
@@ -180,30 +179,30 @@ class GameBoard {
         lastTurn = turn
     }
 
-    fun processTurn(turn: Turn, currPlayer: Player): Optional<String> {
+    fun processTurn(turn: Turn, currPlayer: Player): String? {
         val cellFrom = this[turn.from]
         when {
             (cellFrom is CellT.Empty || cellFrom is CellT.Chess.Black)
                     && currPlayer is Player.White ->
-                return Optional.of("No white pawn at ${turn.from}")
+                return "No white pawn at ${turn.from}"
 
             (cellFrom is CellT.Empty || cellFrom is CellT.Chess.White)
                     && currPlayer is Player.Black ->
-                return Optional.of("No black pawn at ${turn.from}")
+                return "No black pawn at ${turn.from}"
 
             !turn.isCorrect(this) ->
-                return Optional.of("Invalid Input")
+                return "Invalid Input"
         }
 
         performTurn(turn)
-        return Optional.empty()
+        return null
     }
 
     private fun countBlackAndWhite(): Pair<Int, Int> {
         var b = 0
         var w = 0
         rowBoard.forEach {
-            it.forEach{ it2 ->
+            it.forEach { it2 ->
                 if (it2 is CellT.Chess.White) w += 1
                 if (it2 is CellT.Chess.Black) b += 1
             }
@@ -212,7 +211,6 @@ class GameBoard {
     }
 
     fun haveCorrectTurns(position: Position): Boolean {
-        val candidates = mutableListOf<Position>()
         position.run {
             for (letter_ in (letter - 1)..(letter + 1))
                 for (num_ in (num - 1)..(num + 1)) {
@@ -224,7 +222,7 @@ class GameBoard {
         return false
     }
 
-    inline fun<reified Color> haveCorrectTurns(): Boolean {
+    inline fun <reified Color> haveCorrectTurns(): Boolean {
         rowBoard.forEachIndexed { y, it1 ->
             it1.forEachIndexed { x, it2 ->
                 if (it2 is Color)
@@ -238,20 +236,20 @@ class GameBoard {
     fun checkEndOfGame(): Winning {
         rowBoard[0].forEach {
             if (it is CellT.Chess.Black)
-                return Winning.Black
+                return Winning.Win("White wins!")
         }
         rowBoard[7].forEach {
             if (it is CellT.Chess.White)
-                return Winning.White
+                return Winning.Win("White wins!")
         }
         val (b, w) = countBlackAndWhite()
-        if (b == 0) return Winning.White
-        if (w == 0) return Winning.Black
+        if (b == 0) return Winning.Win("White wins!")
+        if (w == 0) return Winning.Win("Black wins!")
 
         if (!haveCorrectTurns<CellT.Chess.White>())
-            return Winning.Stalemate
+            return Winning.Win("Stalemate")
         if (!haveCorrectTurns<CellT.Chess.Black>())
-            return Winning.Stalemate
+            return Winning.Win("Stalemate")
 
         return Winning.InProgress
     }
@@ -272,7 +270,7 @@ sealed class GameAction {
     companion object {
         private val exit = "exit".toRegex()
         private val turn = "[a-h][1-8][a-h][1-8]".toRegex()
-        fun parseAction(str: String): GameAction = when {
+        fun parse(str: String): GameAction = when {
             turn.matches(str) -> TurnAction(Turn(str))
             exit.matches(str) -> ExitAction
             else -> Error
@@ -285,9 +283,10 @@ sealed class GameAction {
 }
 
 sealed class Winning {
-    object White : Winning()
-    object Black : Winning()
-    object Stalemate : Winning()
+    data class Win(private val str: String) : Winning() {
+        override fun toString() = str
+    }
+
     object InProgress : Winning()
 }
 
@@ -310,45 +309,52 @@ class Game {
     }
 
     fun start() {
-        loop@ while (true) {
-            val action = GameAction.parseAction(
-                GameInput("${currPlayerName}'s turn:").answer
+        var stop = false
+        while (!stop) {
+            val action = GameAction.parse(
+                gameInput("${currPlayerName}'s turn:")
             )
-            when (action) {
-                GameAction.Error -> GameOutput("Invalid Input")
+            stop = when (action) {
+                GameAction.Error -> {
+                    GameOutput("Invalid Input")
+                    false
+                }
                 GameAction.ExitAction -> {
                     GameOutput("Bye!")
-                    break@loop
+                    true
                 }
                 is GameAction.TurnAction -> {
-                    val result = board.processTurn(action.turn, currPlayer)
-                    if (result.isPresent) {
-                        GameOutput(result.get())
-                        continue@loop
-                    }
-                    GameOutput(BoardString(board.rowBoard).toString())
-                    when (board.checkEndOfGame()){
-                        Winning.Black -> {
-                            GameOutput("Black Wins!")
-                            GameOutput("Bye!")
-                            break@loop
-                        }
-                        Winning.White -> {
-                            GameOutput("White Wins!")
-                            GameOutput("Bye!")
-                            break@loop
-                        }
-                        Winning.Stalemate -> {
-                            GameOutput("Stalemate!")
-                            GameOutput("Bye!")
-                            break@loop
-                        }
-                        Winning.InProgress -> { }
-                    }
-                    currPlayer = !currPlayer
+                    processTurn(action.turn)
                 }
             }
         }
+    }
+
+    private fun processTurn(turn: Turn): Boolean {
+        board.processTurn(turn, currPlayer)?.let {
+            GameOutput(it)
+            return false
+        }
+        return eofProcessing()
+    }
+
+    private fun eofProcessing(): Boolean {
+        GameOutput(BoardString(board.rowBoard).toString())
+        if (checkEndOfGame())
+            return true
+        currPlayer = !currPlayer
+        return false
+    }
+
+    private fun checkEndOfGame(): Boolean {
+        when (val res = board.checkEndOfGame()) {
+            is Winning.Win -> {
+                GameOutput("${res}\nBye!")
+                return true
+            }
+            Winning.InProgress -> Unit
+        }
+        return false
     }
 }
 
