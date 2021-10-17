@@ -6,13 +6,19 @@ sealed class CellT {
     abstract val direction: Int
     open fun isWalked(row: Int) = false
 
-    class Black : CellT() {
+    operator fun not(): CellT = when (this) {
+        Black -> White
+        Empty -> Empty
+        White -> Black
+    }
+
+    object Black : CellT() {
         override fun isWalked(row: Int) = row != 7
         override val direction: Int = -1
         override fun toString(): String = "B"
     }
 
-    class White : CellT() {
+    object White : CellT() {
         override fun isWalked(row: Int) = row != 2
         override fun toString(): String = "W"
         override val direction: Int = 1
@@ -120,8 +126,11 @@ class GameBoard {
 
     val rawBoard = MutableList(size) { y ->
         MutableList(size) {
-            if (y == 6) CellT.Black() else
-                (if (y == 1) CellT.White() else CellT.Empty)
+            when (y) {
+                6 -> CellT.Black
+                1 -> CellT.White
+                else -> CellT.Empty
+            }
         }
     }
 
@@ -132,7 +141,6 @@ class GameBoard {
     private operator fun set(position: Position, value: CellT) {
         rawBoard[position.y][position.x] = value
     }
-
 
     private fun performTurn(turn: Turn) {
         this[turn.to] = this[turn.from]
@@ -145,12 +153,10 @@ class GameBoard {
     fun processTurn(turn: Turn, currPlayer: Player): String? {
         val cellFrom = this[turn.from]
         when {
-            (cellFrom is CellT.Empty || cellFrom is CellT.Black)
-                    && currPlayer is Player.White ->
+            cellFrom !is CellT.White && currPlayer is Player.White ->
                 return "No white pawn at ${turn.from}"
 
-            (cellFrom is CellT.Empty || cellFrom is CellT.White)
-                    && currPlayer is Player.Black ->
+            cellFrom !is CellT.Black && currPlayer is Player.Black ->
                 return "No black pawn at ${turn.from}"
 
             !turn.isCorrect(this) ->
@@ -161,13 +167,11 @@ class GameBoard {
         return null
     }
 
-    private inline fun <reified Color : CellT> countByColor(): Int {
-        return rawBoard.sumOf {
-            it.filterIsInstance<Color>().size
-        }
+    private inline fun <reified Color : CellT> countByColor() = rawBoard.sumOf {
+        it.filterIsInstance<Color>().size
     }
 
-    fun haveCorrectTurns(position: Position): Boolean {
+    private fun haveCorrectTurns(position: Position): Boolean {
         position.run {
             for (letter_ in (letter - 1)..(letter + 1))
                 for (num_ in (num - 1)..(num + 1)) {
@@ -179,35 +183,32 @@ class GameBoard {
         return false
     }
 
-    inline fun <reified Color> haveCorrectTurns(): Boolean {
-        rawBoard.forEachIndexed { y, it1 ->
-            it1.forEachIndexed { x, it2 ->
-                if (it2 is Color)
-                    if (haveCorrectTurns(Position(x, y)))
-                        return@haveCorrectTurns true
-            }
-        }
+    private inline fun <reified Color> haveCorrectTurns(): Boolean {
+        for ((y, it1) in rawBoard.withIndex())
+            for ((x, it2) in it1.withIndex())
+                if (it2 is Color && haveCorrectTurns(Position(x, y)))
+                    return true
         return false
     }
 
     fun checkEndOfGame(): Winning {
         rawBoard[0].forEach {
             if (it is CellT.Black)
-                return Winning.black
+                return it.win()
         }
         rawBoard[7].forEach {
             if (it is CellT.White)
-                return Winning.white
+                return it.win()
         }
         val b = countByColor<CellT.Black>()
+        if (b == 0) return (!CellT.Black).win()
         val w = countByColor<CellT.White>()
-        if (b == 0) return Winning.white
-        if (w == 0) return Winning.black
+        if (w == 0) return (!CellT.White).win()
 
         if (!haveCorrectTurns<CellT.White>())
-            return Winning.stalemate
+            return Winning.Stalemate
         if (!haveCorrectTurns<CellT.Black>())
-            return Winning.stalemate
+            return Winning.Stalemate
 
         return Winning.InProgress
     }
@@ -223,7 +224,6 @@ sealed class Player {
             Black.name = gameInput("Second Player's name:")
         }
     }
-
 
     object White : Player() {
         override lateinit var name: String
@@ -256,17 +256,28 @@ sealed class GameAction {
 }
 
 sealed class Winning {
-    companion object {
-        val white = Win("White wins!")
-        val black = Win("Black wins!")
-        val stalemate = Win("Stalemate!")
-    }
-
-    data class Win(private val str: String) : Winning() {
+    sealed class Win(private val str: String) : Winning() {
         override fun toString() = str
     }
 
+    operator fun not(): Winning = when (this) {
+        InProgress -> InProgress
+        White -> Black
+        Black -> White
+        Stalemate -> Stalemate
+    }
+
+    object White : Win("White wins!")
+    object Black : Win("Black wins!")
+    object Stalemate : Win("Stalemate!")
+
     object InProgress : Winning()
+}
+
+fun CellT.win() = when (this) {
+    CellT.Black -> Winning.Black
+    CellT.White -> Winning.White
+    CellT.Empty -> throw IllegalArgumentException("Impossible")
 }
 
 class Game {
