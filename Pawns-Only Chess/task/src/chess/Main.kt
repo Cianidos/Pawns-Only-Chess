@@ -45,15 +45,16 @@ class LettersLine {
 }
 
 class BoardString(
-    private val board: Collection<Collection<CellT>>
+    private val board: GameBoard
 ) {
     private companion object {
         val evenLine = "\n" + EvenLine().toString() + "\n"
     }
 
-    override fun toString() = board.reversed()
+    override fun toString() = board.rowBoard
+        .reversed()
         .mapIndexed { idx, row ->
-            OddLine(board.size - idx, row).toString()
+            OddLine(board.rowBoard.size - idx, row).toString()
         }.joinToString(
             evenLine, evenLine,
             evenLine + LettersLine().toString() + "\n"
@@ -65,10 +66,6 @@ fun gameInput(question: String? = null): String {
     return (readLine()!!).trim()
 }
 
-class PlayersNames {
-    val playerOne: String = gameInput("First Player's name:")
-    val playerTwo: String = gameInput("Second Player's name:")
-}
 
 class GameOutput(message: String) {
     init {
@@ -257,8 +254,23 @@ class GameBoard {
 
 
 sealed class Player {
-    object White : Player()
-    object Black : Player()
+    abstract var name: String
+
+    companion object {
+        fun playersNames() {
+            White.name = gameInput("First Player's name:")
+            Black.name = gameInput("Second Player's name:")
+        }
+    }
+
+
+    object White : Player() {
+        override lateinit var name: String
+    }
+
+    object Black : Player() {
+        override lateinit var name: String
+    }
 
     operator fun not(): Player = when (this) {
         Black -> White
@@ -299,19 +311,15 @@ sealed class Winning {
 class Game {
     private var currPlayer: Player = Player.White
     private val currPlayerName: String
-        get() = when (currPlayer) {
-            Player.White -> names.playerOne
-            Player.Black -> names.playerTwo
-        }
+        get() = currPlayer.name
 
-    private var names: PlayersNames
     private var board: GameBoard
 
     init {
         GameOutput("Pawns-Only Chess")
-        names = PlayersNames()
+        Player.playersNames()
         board = GameBoard()
-        GameOutput(BoardString(board.rowBoard).toString())
+        GameOutput(BoardString(board).toString())
     }
 
     fun start() {
@@ -320,21 +328,17 @@ class Game {
                 gameInput("${currPlayerName}'s turn:")
             )
             when (action) {
-                GameAction.Error -> {
-                    GameOutput("Invalid Input")
-                }
+                GameAction.Error -> GameOutput("Invalid Input")
                 GameAction.ExitAction -> {
-                    GameOutput("Bye!")
-                    break
+                    GameOutput("Bye!"); break
                 }
                 is GameAction.TurnAction -> {
-                    when (val it = board.processTurn(action.turn, currPlayer)) {
-                        null -> Unit
-                        else -> {
-                            GameOutput(it); continue
-                        }
+                    val it = board.processTurn(action.turn, currPlayer)
+                    if (it != null) {
+                        GameOutput(it)
+                        continue
                     }
-                    GameOutput(BoardString(board.rowBoard).toString())
+                    GameOutput(BoardString(board).toString())
                     if (checkEndOfGame()) break
                     currPlayer = !currPlayer
                 }
