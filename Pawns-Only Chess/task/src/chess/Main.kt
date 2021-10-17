@@ -27,45 +27,25 @@ sealed class CellT {
 }
 
 
-class EvenLine {
-    override fun toString() = "  +---+---+---+---+---+---+---+---+"
-}
-
-class OddLine(
-    private val rowNum: Int,
-    private val row: Collection<CellT>
-) {
-    override fun toString() = row.joinToString(" | ", "$rowNum | ", " |")
-}
-
-class LettersLine {
-    override fun toString() = "abcdefgh"
-        .split("")
-        .joinToString("   ", " ", "  ")
-}
-
-class BoardString(
-    private val board: GameBoard
-) {
+class BoardString(private val board: GameBoard) {
     private companion object {
-        val evenLine = "\n" + EvenLine().toString() + "\n"
+        const val evenLine = "\n  +---+---+---+---+---+---+---+---+\n"
+        const val lettersLine = " a   b   c   d   e   f   g   h  "
+
+        fun oddLine(rowNum: Int, row: Collection<CellT>) =
+            row.joinToString(" | ", "$rowNum | ", " |")
     }
 
-    override fun toString() = board.rowBoard
+    override fun toString() = board.rawBoard
         .reversed()
-        .mapIndexed { idx, row ->
-            OddLine(board.rowBoard.size - idx, row).toString()
-        }.joinToString(
-            evenLine, evenLine,
-            evenLine + LettersLine().toString() + "\n"
-        )
+        .mapIndexed { idx, row -> oddLine(board.rawBoard.size - idx, row) }
+        .joinToString(evenLine, evenLine, evenLine + lettersLine + "\n")
 }
 
 fun gameInput(question: String? = null): String {
     question?.let { println(it) }
     return (readLine()!!).trim()
 }
-
 
 class GameOutput(message: String) {
     init {
@@ -152,7 +132,7 @@ class GameBoard {
         const val size = 8
     }
 
-    val rowBoard = MutableList(size) { y ->
+    val rawBoard = MutableList(size) { y ->
         MutableList(size) {
             if (y == 6) CellT.Chess.Black() else
                 (if (y == 1) CellT.Chess.White() else CellT.Empty)
@@ -161,9 +141,10 @@ class GameBoard {
 
     var lastTurn: Turn = Turn("a1a1")
 
-    operator fun get(position: Position) = rowBoard[position.y][position.x]
+    operator fun get(position: Position) = rawBoard[position.y][position.x]
+
     private operator fun set(position: Position, value: CellT) {
-        rowBoard[position.y][position.x] = value
+        rawBoard[position.y][position.x] = value
     }
 
 
@@ -195,16 +176,10 @@ class GameBoard {
         return null
     }
 
-    private fun countBlackAndWhite(): Pair<Int, Int> {
-        var b = 0
-        var w = 0
-        rowBoard.forEach {
-            it.forEach { it2 ->
-                if (it2 is CellT.Chess.White) w += 1
-                if (it2 is CellT.Chess.Black) b += 1
-            }
+    private inline fun <reified Color : CellT.Chess> countByColor(): Int {
+        return rawBoard.sumOf {
+            it.filterIsInstance<Color>().size
         }
-        return b to w
     }
 
     fun haveCorrectTurns(position: Position): Boolean {
@@ -220,7 +195,7 @@ class GameBoard {
     }
 
     inline fun <reified Color> haveCorrectTurns(): Boolean {
-        rowBoard.forEachIndexed { y, it1 ->
+        rawBoard.forEachIndexed { y, it1 ->
             it1.forEachIndexed { x, it2 ->
                 if (it2 is Color)
                     if (haveCorrectTurns(Position(x, y)))
@@ -231,15 +206,16 @@ class GameBoard {
     }
 
     fun checkEndOfGame(): Winning {
-        rowBoard[0].forEach {
+        rawBoard[0].forEach {
             if (it is CellT.Chess.Black)
                 return Winning.black
         }
-        rowBoard[7].forEach {
+        rawBoard[7].forEach {
             if (it is CellT.Chess.White)
                 return Winning.white
         }
-        val (b, w) = countBlackAndWhite()
+        val b = countByColor<CellT.Chess.Black>()
+        val w = countByColor<CellT.Chess.White>()
         if (b == 0) return Winning.white
         if (w == 0) return Winning.black
 
