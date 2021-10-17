@@ -4,20 +4,18 @@ import kotlin.math.abs
 
 sealed class CellT {
     abstract val direction: Int
+    open fun isWalked(row: Int) = false
 
-    sealed class Chess : CellT() {
-        // TODO: direction kludge refactor
-        var walked: Int = 0
+    class Black : CellT() {
+        override fun isWalked(row: Int) = row != 7
+        override val direction: Int = -1
+        override fun toString(): String = "B"
+    }
 
-        class Black : Chess() {
-            override val direction: Int = -1
-            override fun toString(): String = "B"
-        }
-
-        class White : Chess() {
-            override fun toString(): String = "W"
-            override val direction: Int = 1
-        }
+    class White : CellT() {
+        override fun isWalked(row: Int) = row != 2
+        override fun toString(): String = "W"
+        override val direction: Int = 1
     }
 
     object Empty : CellT() {
@@ -59,12 +57,6 @@ data class Position(val letter: Char, val num: Int) {
     val x: Int = (letter - 'a')
     val y: Int = num - 1
 
-    fun plusOneL(): Position = Position(letter + 1, num)
-    fun plusOneN(): Position = Position(letter, num + 1)
-
-    fun minusOneL(): Position = Position(letter - 1, num)
-    fun minusOneN(): Position = Position(letter, num - 1)
-
     override fun toString(): String {
         return "$letter$num"
     }
@@ -81,26 +73,21 @@ data class Turn(val from: Position, val to: Position) {
     constructor(other: Turn) : this(other.from, other.to)
     constructor(str: String) : this(parseTurn(str))
 
-    val isBlack: Boolean = to.y < from.y
-    val isWhite: Boolean = to.y > from.y
-    val isInBoard: Boolean = listOf(
-        from.x,
-        from.y,
-        to.x,
-        to.y
-    ).fold(true) { acc, i -> acc && i in 0..7 }
-    val isOnlyForward: Boolean = from.x == to.x
-    val isForward: Boolean = abs(from.y - to.y) == 1
-    val isDouble: Boolean = abs(from.y - to.y) == 2
-    val isToLeft: Boolean = (from.x - 1) == to.x
-    val isToRight: Boolean = (from.x + 1) == to.x
-    val isEnPassant: Boolean =
-        isBlack && !isOnlyForward && from.y == 3 && to.y == 2 ||
-                isWhite && !isOnlyForward && from.y == 4 && to.y == 5
-    val isInArea: Boolean =
-        (isToLeft && isForward) xor (isToRight && isForward) xor (isOnlyForward && isForward) xor (isOnlyForward && isDouble)
-    val vertDirection = if (isWhite) 1 else -1
-    val horDirection = if (isOnlyForward) 0 else (if (isToLeft) -1 else 1)
+    private val isBlack: Boolean = to.y < from.y
+    private val isWhite: Boolean = to.y > from.y
+    private val isInBoard: Boolean = listOf(from.x, from.y, to.x, to.y)
+        .fold(true) { acc, i -> acc && i in 0..7 }
+    private val isForward = from.x == to.x
+    private val isOneForward = abs(from.y - to.y) == 1
+    private val isOneLeft = (from.x - 1) == to.x
+    private val isOneRight = (from.x + 1) == to.x
+    private val vertDirection = if (isWhite) 1 else -1
+    val isTwoForward = abs(from.y - to.y) == 2
+    private val isInArea = (isOneLeft && isOneForward) xor
+            (isOneRight && isOneForward) xor
+            (isForward && isOneForward) xor (isForward && isTwoForward)
+    val isEnPassant = isBlack && !isForward && from.y == 3 &&
+            to.y == 2 || isWhite && !isForward && from.y == 4 && to.y == 5
 
     fun isCorrect(gameBoard: GameBoard): Boolean {
         when {
@@ -110,18 +97,17 @@ data class Turn(val from: Position, val to: Position) {
         val fromC = gameBoard[from]
         val toC = gameBoard[to]
         return when {
-            fromC !is CellT.Chess -> false
+            fromC is CellT.Empty -> false
             fromC.direction != vertDirection -> false
-            fromC.walked != 0 && isDouble -> false
-            isOnlyForward && isForward && toC.direction != 0 -> false
-            isOnlyForward && isDouble && toC.direction != 0 && gameBoard[Position(
-                from.letter,
-                from.num + vertDirection
+            fromC.isWalked(from.num) && isTwoForward -> false
+            isForward && isOneForward && toC.direction != 0 -> false
+            isForward && isTwoForward && toC.direction != 0 && gameBoard[Position(
+                from.letter, from.num + vertDirection
             )].direction != 0 -> false
-            isOnlyForward -> true
-            (!isOnlyForward) && toC.direction == (-fromC.direction) -> true
-            (!isOnlyForward) && gameBoard.lastTurn.isDouble && gameBoard.lastTurn.to.x == to.x && isEnPassant -> true
-            !isOnlyForward -> false
+            isForward -> true
+            (!isForward) && toC.direction == (-fromC.direction) -> true
+            (!isForward) && gameBoard.lastTurn.isTwoForward && gameBoard.lastTurn.to.x == to.x && isEnPassant -> true
+            !isForward -> false
             else -> false
         }
     }
@@ -134,8 +120,8 @@ class GameBoard {
 
     val rawBoard = MutableList(size) { y ->
         MutableList(size) {
-            if (y == 6) CellT.Chess.Black() else
-                (if (y == 1) CellT.Chess.White() else CellT.Empty)
+            if (y == 6) CellT.Black() else
+                (if (y == 1) CellT.White() else CellT.Empty)
         }
     }
 
@@ -151,8 +137,7 @@ class GameBoard {
     private fun performTurn(turn: Turn) {
         this[turn.to] = this[turn.from]
         this[turn.from] = CellT.Empty
-        (this[turn.to] as CellT.Chess).walked += 1
-        if (turn.isEnPassant && lastTurn.isDouble && lastTurn.to.x == turn.to.x)
+        if (turn.isEnPassant && lastTurn.isTwoForward && lastTurn.to.x == turn.to.x)
             this[lastTurn.to] = CellT.Empty
         lastTurn = turn
     }
@@ -160,11 +145,11 @@ class GameBoard {
     fun processTurn(turn: Turn, currPlayer: Player): String? {
         val cellFrom = this[turn.from]
         when {
-            (cellFrom is CellT.Empty || cellFrom is CellT.Chess.Black)
+            (cellFrom is CellT.Empty || cellFrom is CellT.Black)
                     && currPlayer is Player.White ->
                 return "No white pawn at ${turn.from}"
 
-            (cellFrom is CellT.Empty || cellFrom is CellT.Chess.White)
+            (cellFrom is CellT.Empty || cellFrom is CellT.White)
                     && currPlayer is Player.Black ->
                 return "No black pawn at ${turn.from}"
 
@@ -176,7 +161,7 @@ class GameBoard {
         return null
     }
 
-    private inline fun <reified Color : CellT.Chess> countByColor(): Int {
+    private inline fun <reified Color : CellT> countByColor(): Int {
         return rawBoard.sumOf {
             it.filterIsInstance<Color>().size
         }
@@ -207,21 +192,21 @@ class GameBoard {
 
     fun checkEndOfGame(): Winning {
         rawBoard[0].forEach {
-            if (it is CellT.Chess.Black)
+            if (it is CellT.Black)
                 return Winning.black
         }
         rawBoard[7].forEach {
-            if (it is CellT.Chess.White)
+            if (it is CellT.White)
                 return Winning.white
         }
-        val b = countByColor<CellT.Chess.Black>()
-        val w = countByColor<CellT.Chess.White>()
+        val b = countByColor<CellT.Black>()
+        val w = countByColor<CellT.White>()
         if (b == 0) return Winning.white
         if (w == 0) return Winning.black
 
-        if (!haveCorrectTurns<CellT.Chess.White>())
+        if (!haveCorrectTurns<CellT.White>())
             return Winning.stalemate
-        if (!haveCorrectTurns<CellT.Chess.Black>())
+        if (!haveCorrectTurns<CellT.Black>())
             return Winning.stalemate
 
         return Winning.InProgress
