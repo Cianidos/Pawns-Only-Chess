@@ -2,41 +2,32 @@ package chess
 
 import kotlin.math.abs
 
-sealed class CellT {
-    abstract val direction: Int
-    open fun isWalked(row: Int) = false
 
-    operator fun not(): CellT = when (this) {
+enum class Cell(
+    val direction: Int,
+    private val startRow: Int,
+    private val letter: Char
+) {
+    Black(-1, 7, 'B'),
+    White(1, 2, 'W'),
+    Empty(0, -1, ' ');
+
+    operator fun not(): Cell = when (this) {
         Black -> White
         Empty -> Empty
         White -> Black
     }
 
-    object Black : CellT() {
-        override fun isWalked(row: Int) = row != 7
-        override val direction: Int = -1
-        override fun toString(): String = "B"
-    }
-
-    object White : CellT() {
-        override fun isWalked(row: Int) = row != 2
-        override fun toString(): String = "W"
-        override val direction: Int = 1
-    }
-
-    object Empty : CellT() {
-        override val direction: Int = 0
-        override fun toString(): String = " "
-    }
+    fun isWalked(row: Int) = row != startRow
+    override fun toString() = letter.toString()
 }
-
 
 class BoardString(private val board: GameBoard) {
     private companion object {
         const val evenLine = "\n  +---+---+---+---+---+---+---+---+\n"
         const val lettersLine = " a   b   c   d   e   f   g   h  "
 
-        fun oddLine(rowNum: Int, row: Collection<CellT>) =
+        fun oddLine(rowNum: Int, row: Collection<Cell>) =
             row.joinToString(" | ", "$rowNum | ", " |")
     }
 
@@ -103,7 +94,7 @@ data class Turn(val from: Position, val to: Position) {
         val fromC = gameBoard[from]
         val toC = gameBoard[to]
         return when {
-            fromC is CellT.Empty -> false
+            fromC == Cell.Empty -> false
             fromC.direction != vertDirection -> false
             fromC.isWalked(from.num) && isTwoForward -> false
             isForward && isOneForward && toC.direction != 0 -> false
@@ -127,9 +118,9 @@ class GameBoard {
     val rawBoard = MutableList(size) { y ->
         MutableList(size) {
             when (y) {
-                6 -> CellT.Black
-                1 -> CellT.White
-                else -> CellT.Empty
+                6 -> Cell.Black
+                1 -> Cell.White
+                else -> Cell.Empty
             }
         }
     }
@@ -138,25 +129,25 @@ class GameBoard {
 
     operator fun get(position: Position) = rawBoard[position.y][position.x]
 
-    private operator fun set(position: Position, value: CellT) {
+    private operator fun set(position: Position, value: Cell) {
         rawBoard[position.y][position.x] = value
     }
 
     private fun performTurn(turn: Turn) {
         this[turn.to] = this[turn.from]
-        this[turn.from] = CellT.Empty
+        this[turn.from] = Cell.Empty
         if (turn.isEnPassant && lastTurn.isTwoForward && lastTurn.to.x == turn.to.x)
-            this[lastTurn.to] = CellT.Empty
+            this[lastTurn.to] = Cell.Empty
         lastTurn = turn
     }
 
     fun processTurn(turn: Turn, currPlayer: Player): String? {
         val cellFrom = this[turn.from]
         when {
-            cellFrom !is CellT.White && currPlayer is Player.White ->
+            cellFrom != Cell.White && currPlayer is Player.White ->
                 return "No white pawn at ${turn.from}"
 
-            cellFrom !is CellT.Black && currPlayer is Player.Black ->
+            cellFrom != Cell.Black && currPlayer is Player.Black ->
                 return "No black pawn at ${turn.from}"
 
             !turn.isCorrect(this) ->
@@ -167,9 +158,8 @@ class GameBoard {
         return null
     }
 
-    private inline fun <reified Color : CellT> countByColor() = rawBoard.sumOf {
-        it.filterIsInstance<Color>().size
-    }
+    private fun countByColor(cell: Cell) =
+        rawBoard.sumOf { it.count { c -> c == cell } }
 
     private fun haveCorrectTurns(position: Position): Boolean {
         position.run {
@@ -183,31 +173,31 @@ class GameBoard {
         return false
     }
 
-    private inline fun <reified Color> haveCorrectTurns(): Boolean {
+    private fun haveCorrectTurns(Color: Cell): Boolean {
         for ((y, it1) in rawBoard.withIndex())
             for ((x, it2) in it1.withIndex())
-                if (it2 is Color && haveCorrectTurns(Position(x, y)))
+                if (it2 == Color && haveCorrectTurns(Position(x, y)))
                     return true
         return false
     }
 
     fun checkEndOfGame(): Winning {
         rawBoard[0].forEach {
-            if (it is CellT.Black)
+            if (it == Cell.Black)
                 return it.win()
         }
         rawBoard[7].forEach {
-            if (it is CellT.White)
+            if (it == Cell.White)
                 return it.win()
         }
-        val b = countByColor<CellT.Black>()
-        if (b == 0) return (!CellT.Black).win()
-        val w = countByColor<CellT.White>()
-        if (w == 0) return (!CellT.White).win()
+        val b = countByColor(Cell.Black)
+        if (b == 0) return (!Cell.Black).win()
+        val w = countByColor(Cell.White)
+        if (w == 0) return (!Cell.White).win()
 
-        if (!haveCorrectTurns<CellT.White>())
+        if (!haveCorrectTurns(Cell.White))
             return Winning.Stalemate
-        if (!haveCorrectTurns<CellT.Black>())
+        if (!haveCorrectTurns(Cell.Black))
             return Winning.Stalemate
 
         return Winning.InProgress
@@ -274,10 +264,10 @@ sealed class Winning {
     object InProgress : Winning()
 }
 
-fun CellT.win() = when (this) {
-    CellT.Black -> Winning.Black
-    CellT.White -> Winning.White
-    CellT.Empty -> throw IllegalArgumentException("Impossible")
+fun Cell.win() = when (this) {
+    Cell.Black -> Winning.Black
+    Cell.White -> Winning.White
+    Cell.Empty -> throw IllegalArgumentException("Impossible")
 }
 
 class Game {
